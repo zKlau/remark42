@@ -26,11 +26,6 @@ import { Counter } from './components/counter';
 
 const COMMENTS_LIMIT = 10;
 
-async function signout() {
-  postMessageToParent({ profile: null, signout: true });
-  await logout();
-}
-
 // TODO: rewrite hide user logic and bring button to user profile
 export function Profile() {
   const intl = useIntl();
@@ -82,15 +77,8 @@ export function Profile() {
     });
   }
 
-  async function handleClickLogout() {
-    setSigningOut(true);
-    await signout();
-    setSigningOut?.(false);
-  }
-
   async function handleClickRequestRemoveData() {
     await requestDeletion();
-    await signout();
   }
 
   useEffect(() => {
@@ -193,18 +181,7 @@ export function Profile() {
           </div>
           <div className={clsx('profile-content', styles.info)}>
             <div className={clsx('profile-title', styles.name)}>{user.name}</div>
-            <div className={clsx('profile-id', styles.id)}>{user.id}</div>
           </div>
-          {isCurrent && (
-            <button
-              className={clsx('profile-signout', styles.signout)}
-              title={intl.formatMessage(authMessages.signout)}
-              onClick={handleClickLogout}
-              disabled={isSigningOut}
-            >
-              {isSigningOut ? <Spinner /> : <SignOutIcon />}
-            </button>
-          )}
         </header>
         <section className={clsx('profile-content', styles.content)}>
           {error && (
