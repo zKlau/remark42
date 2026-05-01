@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"crypto/sha1" //nolint:gosec // used only for stable ID hashing, not for security
+	"database/sql"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -26,6 +27,8 @@ import (
 	"github.com/kyokomi/emoji/v2"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/oauth2"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/go-pkgz/auth/v2"
 	"github.com/go-pkgz/auth/v2/avatar"
@@ -63,6 +66,7 @@ type ServerCommand struct {
 	Image      ImageGroup      `group:"image" namespace:"image" env-namespace:"IMAGE"`
 	SSL        SSLGroup        `group:"ssl" namespace:"ssl" env-namespace:"SSL"`
 	ImageProxy ImageProxyGroup `group:"image-proxy" namespace:"image-proxy" env-namespace:"IMAGE_PROXY"`
+	UserNameDB UserNameDBGroup `group:"user-name-db" namespace:"user-name-db" env-namespace:"USER_NAME_DB"`
 
 	Sites                      []string      `long:"site" env:"SITE" default:"remark" description:"site names" env-delim:","`
 	AnonymousVote              bool          `long:"anon-vote" env:"ANON_VOTE" description:"enable anonymous votes (works only with VOTES_IP enabled)"`
@@ -142,6 +146,19 @@ type ServerCommand struct {
 type ImageProxyGroup struct {
 	HTTP2HTTPS    bool `long:"http2https" env:"HTTP2HTTPS" description:"enable HTTP->HTTPS proxy"`
 	CacheExternal bool `long:"cache-external" env:"CACHE_EXTERNAL" description:"enable caching for external images"`
+}
+
+// UserNameDBGroup configures direct SQL lookup for current user names used in public endpoints.
+type UserNameDBGroup struct {
+	Enable          bool          `long:"enable" env:"ENABLE" description:"enable direct SQL lookup for current user names in public comments responses"`
+	Driver          string        `long:"driver" env:"DRIVER" default:"pgx" choice:"pgx" description:"database/sql driver name for PostgreSQL"`
+	DSN             string        `long:"dsn" env:"DSN" description:"database DSN for external user database"`
+	Query           string        `long:"query" env:"QUERY" default:"SELECT name FROM users WHERE id = $1" description:"query used to resolve user name by user id (first parameter should be user id)"`
+	CacheTTL        time.Duration `long:"cache-ttl" env:"CACHE_TTL" default:"6h" description:"TTL for cached username lookups"`
+	Timeout         time.Duration `long:"timeout" env:"TIMEOUT" default:"300ms" description:"timeout for a single username lookup query"`
+	MaxOpenConns    int           `long:"max-open-conns" env:"MAX_OPEN_CONNS" default:"5" description:"maximum open SQL connections for username resolver"`
+	MaxIdleConns    int           `long:"max-idle-conns" env:"MAX_IDLE_CONNS" default:"5" description:"maximum idle SQL connections for username resolver"`
+	ConnMaxLifetime time.Duration `long:"conn-max-lifetime" env:"CONN_MAX_LIFETIME" default:"30m" description:"max lifetime of SQL connections for username resolver"`
 }
 
 // AppleGroup defines options for Apple auth params
@@ -333,6 +350,7 @@ type serverApp struct {
 	imageService  *image.Service
 	authenticator *auth.Service
 	terminated    chan struct{}
+	userNameDB    *sql.DB
 
 	authRefreshCache *authRefreshCache // stored only to close it properly on shutdown
 }
@@ -692,6 +710,19 @@ func (s *ServerCommand) newServerApp(ctx context.Context) (*serverApp, error) {
 		return nil, fmt.Errorf("failed to make config of ssl server params: %w", err)
 	}
 
+	var (
+		userNameResolver api.UserNameResolver
+		userNameDB       *sql.DB
+	)
+	if s.UserNameDB.Enable {
+		userNameResolver, userNameDB, err = s.makeUserNameResolver()
+		if err != nil {
+			_ = dataService.Close()
+			_ = authRefreshCache.Close()
+			return nil, fmt.Errorf("failed to initialize username db resolver: %w", err)
+		}
+	}
+
 	srv := &api.Rest{
 		Version:                    s.Revision,
 		DataService:                dataService,
@@ -722,6 +753,7 @@ func (s *ServerCommand) newServerApp(ctx context.Context) (*serverApp, error) {
 		DisableSignature:           s.DisableSignature,
 		DisableFancyTextFormatting: s.DisableFancyTextFormatting,
 		ExternalImageProxy:         s.ImageProxy.CacheExternal,
+		UserNameResolver:           userNameResolver,
 	}
 
 	srv.ScoreThresholds.Low, srv.ScoreThresholds.Critical = s.LowScore, s.CriticalScore
@@ -749,6 +781,7 @@ func (s *ServerCommand) newServerApp(ctx context.Context) (*serverApp, error) {
 		imageService:     imageService,
 		authenticator:    authenticator,
 		terminated:       make(chan struct{}),
+		userNameDB:       userNameDB,
 		authRefreshCache: authRefreshCache,
 	}, nil
 }
@@ -872,6 +905,11 @@ func (a *serverApp) run(ctx context.Context) error {
 	}
 	if e := a.authRefreshCache.Close(); e != nil {
 		log.Printf("[WARN] failed to close auth authRefreshCache, %s", e)
+	}
+	if a.userNameDB != nil {
+		if e := a.userNameDB.Close(); e != nil {
+			log.Printf("[WARN] failed to close user-name DB connection, %s", e)
+		}
 	}
 	a.notifyService.Close()
 	// call potentially infinite loop with cancellation after a minute as a safeguard
@@ -1043,6 +1081,42 @@ func (s *ServerCommand) makeCache() (LoadingCache, error) {
 		return cache.NewScache[[]byte](&cache.Nop[[]byte]{}), nil
 	}
 	return nil, fmt.Errorf("unsupported cache type %s", s.Cache.Type)
+}
+
+func (s *ServerCommand) makeUserNameResolver() (api.UserNameResolver, *sql.DB, error) {
+	if s.UserNameDB.DSN == "" {
+		return nil, nil, fmt.Errorf("--user-name-db.dsn should be set when --user-name-db.enable=true")
+	}
+
+	if s.UserNameDB.Query == "" {
+		return nil, nil, fmt.Errorf("--user-name-db.query should not be empty")
+	}
+
+	db, err := sql.Open(s.UserNameDB.Driver, s.UserNameDB.DSN)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open user-name DB: %w", err)
+	}
+
+	db.SetMaxOpenConns(s.UserNameDB.MaxOpenConns)
+	db.SetMaxIdleConns(s.UserNameDB.MaxIdleConns)
+	db.SetConnMaxLifetime(s.UserNameDB.ConnMaxLifetime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.UserNameDB.Timeout)
+	defer cancel()
+
+	if err = db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, nil, fmt.Errorf("failed to ping user-name DB: %w", err)
+	}
+
+	resolver, err := api.NewSQLUserNameResolver(db, s.UserNameDB.Query, s.UserNameDB.CacheTTL, s.UserNameDB.Timeout)
+	if err != nil {
+		_ = db.Close()
+		return nil, nil, fmt.Errorf("failed to create SQL user-name resolver: %w", err)
+	}
+
+	log.Printf("[INFO] user-name SQL resolver enabled, driver=%s cache_ttl=%s timeout=%s", s.UserNameDB.Driver, s.UserNameDB.CacheTTL, s.UserNameDB.Timeout)
+	return resolver, db, nil
 }
 
 //nolint:gocyclo // simple code but many if checks

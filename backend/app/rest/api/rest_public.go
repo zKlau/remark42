@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1" // nolint
 	"encoding/base64"
 	"encoding/json"
@@ -32,6 +33,7 @@ type public struct {
 	readOnlyAge      int
 	commentFormatter *store.CommentFormatter
 	imageService     *image.Service
+	userNameResolver UserNameResolver
 }
 
 type pubStore interface {
@@ -105,6 +107,7 @@ func (s *public) findCommentsCtrl(w http.ResponseWriter, r *http.Request) {
 		if e != nil {
 			comments = []store.Comment{} // error should clear comments and continue for post info
 		}
+		comments = s.refreshCommentsUserNames(r.Context(), comments)
 		comments = s.applyView(comments, view)
 
 		var commentsInfo store.PostInfo
@@ -272,6 +275,7 @@ func (s *public) findUserCommentsCtrl(w http.ResponseWriter, r *http.Request) {
 			return nil, e
 		}
 		comments = filterComments(comments, func(c store.Comment) bool { return !c.Deleted })
+		comments = s.refreshCommentsUserNames(r.Context(), comments)
 		count, e := s.dataService.UserCount(siteID, userID)
 		if e != nil {
 			return nil, e
@@ -483,6 +487,47 @@ func (s *public) applyView(comments []store.Comment, view string) []store.Commen
 			projection = append(projection, p)
 		}
 		return projection
+	}
+
+	return comments
+}
+
+func (s *public) refreshCommentsUserNames(ctx context.Context, comments []store.Comment) []store.Comment {
+	if s.userNameResolver == nil || len(comments) == 0 {
+		return comments
+	}
+
+	resolvedNames := make(map[string]string, len(comments))
+	missingNames := make(map[string]struct{}, len(comments))
+
+	for i := range comments {
+		uid := comments[i].User.ID
+		if uid == "" {
+			continue
+		}
+
+		if _, markedMissing := missingNames[uid]; markedMissing {
+			continue
+		}
+
+		if name, ok := resolvedNames[uid]; ok {
+			comments[i].User.Name = name
+			continue
+		}
+
+		name, found, err := s.userNameResolver.Resolve(ctx, uid)
+		if err != nil {
+			log.Printf("[WARN] failed to refresh user name for id %q: %v", uid, err)
+			missingNames[uid] = struct{}{}
+			continue
+		}
+		if !found || name == "" {
+			missingNames[uid] = struct{}{}
+			continue
+		}
+
+		resolvedNames[uid] = name
+		comments[i].User.Name = name
 	}
 
 	return comments

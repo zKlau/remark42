@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +22,15 @@ import (
 	"github.com/umputun/remark42/backend/app/store"
 	"github.com/umputun/remark42/backend/app/store/service"
 )
+
+type testUserNameResolver struct {
+	names map[string]string
+}
+
+func (r testUserNameResolver) Resolve(_ context.Context, userID string) (name string, found bool, err error) {
+	name, found = r.names[userID]
+	return name, found, nil
+}
 
 func TestRest_Ping(t *testing.T) {
 	ts, _, teardown := startupT(t)
@@ -240,6 +250,55 @@ func TestRest_Find(t *testing.T) {
 	assert.Equal(t, 2, tree.Info.Count)
 	assert.Equal(t, "https://radio-t.com/blah1", tree.Info.URL)
 	assert.False(t, tree.Info.ReadOnly, "post is fresh")
+}
+
+func TestRest_Find_RefreshesUserName(t *testing.T) {
+	ts, srv, teardown := startupT(t, func(srv *Rest) {
+		srv.UserNameResolver = testUserNameResolver{names: map[string]string{"13": "New Name"}}
+	})
+	defer teardown()
+
+	_, err := srv.DataService.Create(store.Comment{
+		Text: "test test #1",
+		User: store.User{ID: "13", Name: "Old Name"},
+		Locator: store.Locator{SiteID: "remark42", URL: "https://radio-t.com/blah1"},
+	})
+	require.NoError(t, err)
+
+	res, code := get(t, ts.URL+"/api/v1/find?site=remark42&url=https://radio-t.com/blah1")
+	assert.Equal(t, http.StatusOK, code)
+
+	comments := commentsWithInfo{}
+	err = json.Unmarshal([]byte(res), &comments)
+	require.NoError(t, err)
+	require.Len(t, comments.Comments, 1)
+	assert.Equal(t, "New Name", comments.Comments[0].User.Name)
+}
+
+func TestRest_FindUserComments_RefreshesUserName(t *testing.T) {
+	ts, srv, teardown := startupT(t, func(srv *Rest) {
+		srv.UserNameResolver = testUserNameResolver{names: map[string]string{"13": "New Name"}}
+	})
+	defer teardown()
+
+	_, err := srv.DataService.Create(store.Comment{
+		Text: "test test #1",
+		User: store.User{ID: "13", Name: "Old Name"},
+		Locator: store.Locator{SiteID: "remark42", URL: "https://radio-t.com/blah1"},
+	})
+	require.NoError(t, err)
+
+	res, code := get(t, ts.URL+"/api/v1/comments?site=remark42&user=13&skip=0&limit=10")
+	assert.Equal(t, http.StatusOK, code)
+
+	resp := struct {
+		Comments []store.Comment `json:"comments"`
+		Count    int             `json:"count"`
+	}{}
+	err = json.Unmarshal([]byte(res), &resp)
+	require.NoError(t, err)
+	require.Len(t, resp.Comments, 1)
+	assert.Equal(t, "New Name", resp.Comments[0].User.Name)
 }
 
 func TestRest_FindAge(t *testing.T) {

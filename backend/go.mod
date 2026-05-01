@@ -22,6 +22,7 @@ require (
 	github.com/gorilla/feeds v1.2.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jessevdk/go-flags v1.6.1
+	github.com/jackc/pgx/v5 v5.7.6
 	github.com/kyokomi/emoji/v2 v2.2.13
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/rs/xid v1.6.0

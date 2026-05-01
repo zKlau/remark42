@@ -47,6 +47,7 @@ type Rest struct {
 	NotifyService    *notify.Service
 	TelegramService  telegramService
 	ImageService     *image.Service
+	UserNameResolver UserNameResolver
 
 	AnonVote        bool
 	WebRoot         string
@@ -373,6 +374,7 @@ func (s *Rest) controllerGroups() (public, private, admin, rss) {
 		imageService:     s.ImageService,
 		commentFormatter: s.CommentFormatter,
 		readOnlyAge:      s.ReadOnlyAge,
+		userNameResolver: s.UserNameResolver,
 	}
 
 	privGrp := private{
