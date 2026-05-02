@@ -45,7 +45,7 @@ func TestWebhook_ReceiveValidJSON(t *testing.T) {
 		body, err := io.ReadAll(r.Body)
 		assert.NoError(t, err)
 		t.Log("received body", string(body))
-		assert.JSONEq(t, `{"text": "<p>testme</p>\n"}`, string(body))
+		assert.JSONEq(t, `{"text": "testme & \"discord\""}`, string(body))
 	}))
 	defer ts.Close()
 
@@ -57,7 +57,7 @@ func TestWebhook_ReceiveValidJSON(t *testing.T) {
 	assert.NotNil(t, wh)
 
 	f := store.NewCommentFormatter()
-	c := store.Comment{Text: f.FormatText("testme", false), ParentID: "1", ID: "999"}
+	c := store.Comment{Text: f.FormatText(`testme & "discord"`, false), ParentID: "1", ID: "999"}
 
 	err = wh.Send(context.Background(), Request{Comment: c})
 	assert.NoError(t, err)

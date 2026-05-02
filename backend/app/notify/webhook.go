@@ -65,8 +65,10 @@ func NewWebhook(params WebhookParams) (*Webhook, error) {
 // Send sends Webhook notification
 func (w *Webhook) Send(ctx context.Context, req Request) error {
 	log.Printf("[DEBUG] send webhook notification, comment id %s", req.Comment.ID)
+	comment := req.Comment
+	comment.Text = comment.SanitizeText(comment.Text)
 	var payload bytes.Buffer
-	err := w.template.Execute(&payload, req.Comment)
+	err := w.template.Execute(&payload, comment)
 	if err != nil {
 		return fmt.Errorf("unable to compile webhook template: %w", err)
 	}
