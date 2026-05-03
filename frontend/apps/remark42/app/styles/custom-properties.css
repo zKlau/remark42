@@ -1,9 +1,9 @@
 :root {
   --color0: #0f172a;
-  --color8: #262626;
+  --color8: #111;
   --color22: #2d2d2c;
   --color24: #313133;
-  --color7: #333;
+  --color7: #b84024;
   --color23: #393734;
   --color18: #383838;
   --color19: #404040;
@@ -21,7 +21,7 @@
   --color46: rgba(27, 31, 35, 0.15);
   --color45: rgba(0, 0, 0, 0.1);
   --color41: #efefef;
-  --color5: #eee;
+  --color5: #fff;
   --color44: rgba(255, 255, 255, 0.3);
   --color6: #fff;
   --color3: #e2efef;
@@ -30,9 +30,9 @@
   --color31: #cbd5e1;
   --color21: #f1f5f9;
   --color29: #0e7e9d;
-  --color9: #0aa;
+  --color9: #b84024;
   --color15: #099;
-  --color33: #06c5c5;
+  --color33: #fff;
   --color40: #9cdddb;
   --color43: #b7dddd;
   --color42: #c6efef;
@@ -59,10 +59,12 @@
   --chroma-07: #00aee2;
 
   /* Named variables */
+  --colorTextInput: #303030;
+  --colorCommentText: #d5d1d1;
   --primary-color: 0, 170, 170;
   --primary-brighter-color: 0, 153, 153;
   --primary-darker-color: 0, 102, 102;
-  --primary-text-color: 38, 38, 38;
+  --primary-text-color: 255, 255, 255;
   --secondary-text-color: 100, 116, 139;
   --secondary-darker-text-color: 150, 150, 150;
   --primary-background-color: 255, 255, 255;
@@ -72,7 +74,7 @@
   --error-background: #ff466f2b;
   --line-color: var(--color16);
   --line-brighter-color: var(--color31);
-  --text-color: var(--black-color);
+  --text-color: var(--white-color);
   --transparent: transparent;
 }
 

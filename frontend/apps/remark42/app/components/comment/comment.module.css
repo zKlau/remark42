@@ -217,6 +217,7 @@
 }
 
 .viewPreview {
+  font-family: 'Cabin', sans-serif;
   &,
   &.themeLight,
   &.themeDark {
@@ -231,7 +232,7 @@
     }
 
     & .titleLink {
-      color: var(--color9);
+      color: var(--color5);
       text-decoration: none;
 
       &:hover {
@@ -243,7 +244,7 @@
       display: inline;
       padding-right: 0;
       font-weight: 700;
-      color: var(--color10);
+      color: var(--colorCommentText);
 
       &::after {
         content: ' ';
@@ -251,7 +252,7 @@
     }
 
     & .username {
-      color: var(--color9);
+      color: var(--color5);
     }
 
     & .text {
