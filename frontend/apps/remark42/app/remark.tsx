@@ -21,6 +21,14 @@ if (document.readyState === 'loading') {
   init();
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+  document.body.classList.remove('loading');
+});
+
+setTimeout(() => {
+  document.body.classList.remove('loading');
+}, 100);
+
 async function init(): Promise<void> {
   __webpack_public_path__ = `${BASE_URL}/web/`;
 

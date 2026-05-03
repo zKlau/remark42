@@ -39,8 +39,16 @@
     <% if (htmlWebpackPlugin.options.env === 'production') { %>
     <link rel="stylesheet" href="remark.css" />
     <% } %>
+    <style>
+      body.loading {
+        opacity: 0;
+      }
+      body:not(.loading) {
+        transition: opacity 0.3s ease-in;
+      }
+    </style>
   </head>
-  <body style="background-color: var(--primary-background-color, #262626); margin: 0; padding: 0">
+  <body class="loading" style="background-color: var(--primary-background-color, #262626); margin: 0; padding: 0">
     <div id="remark42">
       <div class="preloader preloader_view_iframe"></div>
     </div>
