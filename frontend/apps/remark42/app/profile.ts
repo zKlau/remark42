@@ -31,15 +31,23 @@ function createFragment(params: Profile & Record<string, string | unknown>) {
 
   root.appendChild(iframe);
   setStyles(root, styles.rootShown);
-  setTimeout(() => iframe?.focus());
+  requestAnimationFrame(() => {
+    iframe?.focus();
+  });
 }
 
 function animateAppear(): void {
   window.requestAnimationFrame(() => {
-    if (!root || !iframe) {
+    const rootElement = root;
+    const iframeElement = iframe;
+
+    if (!rootElement || !iframeElement) {
       return;
     }
-    setStyles(root, styles.rootAppear);
+    window.requestAnimationFrame(() => {
+      setStyles(rootElement, styles.rootAppear);
+      setStyles(iframeElement, styles.iframeShown);
+    });
   });
 }
 
@@ -101,6 +109,7 @@ const styles = {
     background: 'rgba(0, 0, 0, .4)',
     opacity: 0,
     zIndex: 99999999,
+    willChange: 'opacity',
   },
   rootShown: {
     display: 'block',
@@ -120,5 +129,12 @@ const styles = {
     right: 0,
     width: '100%',
     height: '100%',
+    colorScheme: 'light dark',
+    opacity: 0,
+    transition: 'opacity 0.5s ease-in',
+    willChange: 'opacity',
+  },
+  iframeShown: {
+    opacity: '1',
   },
 };

@@ -70,6 +70,11 @@ class AuthPanelComponent extends Component<Props, State> {
           </div>
           {user.name}
         </button>{' '}
+        <div className={styles.userLogoutButton}>
+          <IconButton title={this.props.intl.formatMessage(messages.signout)} onClick={this.props.signout}>
+            <SignOutIcon size="14" />
+          </IconButton>
+        </div>
       </div>
     );
   };
