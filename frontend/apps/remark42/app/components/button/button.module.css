@@ -36,11 +36,12 @@
 }
 
 .kindPrimary {
-  background: var(--color15);
+  background: var(--color9);
   color: var(--color6);
 
   &:hover {
     background: var(--color33);
+    color: var(--color9);
   }
 
   &:hover:disabled {

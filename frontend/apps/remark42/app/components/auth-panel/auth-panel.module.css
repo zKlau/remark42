@@ -40,7 +40,7 @@
   display: flex;
   align-items: center;
   font-weight: bold;
-  color: rgb(var(--secondary-text-color));
+  color: rgb(var(--primary-text-color));
   transition: color 0.15s;
 
   &:hover {
